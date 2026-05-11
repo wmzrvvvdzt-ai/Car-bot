@@ -5,7 +5,7 @@ from aiohttp_socks import ProxyConnector
 from handlers.start import router
 from config import TOKEN
 
-proxy_url = "socks5://LOGIN:PASSWORD@IP:PORT"
+proxy_url = "socks5://SGmGga:EbPsjy@45.91.209.146:10230"
 
 async def main():
     connector = ProxyConnector.from_url(proxy_url)
