@@ -1,7 +1,7 @@
 import asyncio
 from aiogram import Bot, Dispatcher
 from aiogram.client.session.aiohttp import AiohttpSession
-from aiohttp_socks import ProxyConnector
+from aiohttp_socks import ProxyConnectoru
 from handlers.start import router
 from config import TOKEN
 
@@ -12,8 +12,8 @@ async def main():
     session = AiohttpSession(connector=connector)
 
     bot = Bot(token=TOKEN, session=session)
-    dp = Dispatcher()
 
+    dp = Dispatcher()
     dp.include_router(router)
 
     print("Bot started...")
