@@ -1,2 +1,0 @@
-def is_good(price, avg):
-    return (avg - price) / avg * 100 >= 15
