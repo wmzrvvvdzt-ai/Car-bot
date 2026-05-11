@@ -1,23 +1,26 @@
 import asyncio
+
 from aiogram import Bot, Dispatcher
 from aiogram.client.session.aiohttp import AiohttpSession
-from aiohttp_socks import ProxyConnectoru
-from handlers.start import router
-from config import TOKEN
+from aiohttp_socks import ProxyConnector
 
-proxy_url = "socks5://SGmGga:EbPsjy@45.91.209.146:10230"
+from config import TOKEN, PROXY
+from handlers.start import router
+
 
 async def main():
-    connector = ProxyConnector.from_url(proxy_url)
+    connector = ProxyConnector.from_url(PROXY)
     session = AiohttpSession(connector=connector)
 
     bot = Bot(token=TOKEN, session=session)
-
     dp = Dispatcher()
+
     dp.include_router(router)
 
     print("Bot started...")
+
     await dp.start_polling(bot)
+
 
 if __name__ == "__main__":
     asyncio.run(main())
