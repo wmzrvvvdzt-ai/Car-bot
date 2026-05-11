@@ -4,7 +4,7 @@ from aiogram import Bot, Dispatcher
 from aiogram.client.session.aiohttp import AiohttpSession
 from aiohttp_socks import ProxyConnector
 
-from config import TOKEN, PROXY
+from config import TOKEN, CHAT_ID, MIN_DISCOUNT
 from handlers.start import router
 
 
