@@ -1,9 +1,7 @@
-from aiogram import Router
-from aiogram.types import Message
+from aiogram import Router, types
 
 router = Router()
 
 @router.message()
-async def start_handler(message: Message):
-    if message.text == "/start":
-        await message.answer("Бот работает ✅")
+async def start(message: types.Message):
+    await message.answer("Бот работает ✅")
