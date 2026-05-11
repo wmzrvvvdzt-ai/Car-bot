@@ -1,2 +1,0 @@
-pip uninstall -y aiohttp aiohttp-socks aiogram
-pip install aiogram==3.6.0 aiohttp==3.9.5 python-dotenv
