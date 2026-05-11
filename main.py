@@ -1,18 +1,16 @@
 import asyncio
-from aiogram import Bot, Dispatcher, types
-from aiogram.filters import Command
-from config import TOKEN
+from aiogram import Bot, Dispatcher
+from config import BOT_TOKEN
 
 dp = Dispatcher()
 
-@dp.message(Command("start"))
-async def start(message: types.Message):
-    await message.answer("Бот работает ✅")
+@dp.message()
+async def echo(message):
+    await message.answer(message.text)
 
 async def main():
-    bot = Bot(token=TOKEN)
-
-    await bot.delete_webhook(drop_pending_updates=True)
+    bot = Bot(token=BOT_TOKEN)
+    print("Bot started")
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
