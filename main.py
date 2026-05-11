@@ -1,10 +1,19 @@
-import asyncio
+from aiohttp import TCPConnector
+from aiogram.client.session.aiohttp import AiohttpSession
 from aiogram import Bot, Dispatcher
+import asyncio
 
 TOKEN = "8590083060:AAHzISyE09bEMp-m5HDJs-BoILHCL456cCA"
 
 async def main():
-    bot = Bot(token=TOKEN)
+    session = AiohttpSession(
+        connector=TCPConnector(
+            force_close=True,
+            ssl=False
+        )
+    )
+
+    bot = Bot(token=TOKEN, session=session)
     dp = Dispatcher()
 
     print("Bot started...")
