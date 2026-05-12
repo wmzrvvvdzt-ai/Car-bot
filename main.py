@@ -7,6 +7,8 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 
 import aiohttp
 from bs4 import BeautifulSoup
+from playwright.async_api import async_playwright  # ← ВОТ СЮДА ДОБАВИТЬ
+
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command
 from dotenv import load_dotenv
