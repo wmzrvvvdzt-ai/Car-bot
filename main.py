@@ -216,6 +216,8 @@ async def run_bot():
 
 
 async def main():
+    await bot.delete_webhook(drop_pending_updates=True)  # ← FIX Telegram conflict
+
     Thread(target=run_web_server, daemon=True).start()
     await run_bot()
 
