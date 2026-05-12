@@ -65,86 +65,94 @@ async def fetch(session, url):
 async def parse_avito():
     url = "https://www.avito.ru/moskva/avtomobili"
 
-    headers = {
-        "User-Agent": "Mozilla/5.0"
-    }
-
-    async with aiohttp.ClientSession(headers=headers) as session:
-        html = await fetch(session, url)
-
-    if not html:
-        return []
-
-    soup = BeautifulSoup(html, "lxml")
-
-    items = soup.select("div[data-marker='item']")
-
     results = []
 
-    for item in items[:10]:
-        try:
-            title = item.get_text(" ", strip=True)
+    try:
+        async with async_playwright() as p:
+            browser = await p.chromium.launch(headless=True)
+            page = await browser.new_page()
 
-            a = item.find("a", href=True)
-            if not a:
-                continue
+            await page.goto(url, timeout=60000)
+            await page.wait_for_timeout(5000)
 
-            link = "https://www.avito.ru" + a["href"]
+            cards = await page.query_selector_all("div[data-marker='item']")
 
-            results.append({
-                "source": "Avito",
-                "title": title[:120],
-                "price": "—",
-                "url": link
-            })
+            for card in cards[:10]:
+                try:
+                    title = await card.inner_text()
+                    link_el = await card.query_selector("a")
 
-        except:
-            continue
+                    if not link_el:
+                        continue
+
+                    href = await link_el.get_attribute("href")
+                    if not href:
+                        continue
+
+                    if href.startswith("/"):
+                        href = "https://www.avito.ru" + href
+
+                    results.append({
+                        "source": "Avito",
+                        "title": title[:120],
+                        "price": "—",
+                        "url": href
+                    })
+
+                except:
+                    continue
+
+            await browser.close()
+
+    except Exception as e:
+        logging.error(f"Avito error: {e}")
 
     return results
-
 
 # ---------------- DROM ----------------
 
 async def parse_drom():
     url = "https://auto.drom.ru/moskva/"
 
-    headers = {
-        "User-Agent": "Mozilla/5.0"
-    }
-
-    async with aiohttp.ClientSession(headers=headers) as session:
-        html = await fetch(session, url)
-
-    if not html:
-        return []
-
-    soup = BeautifulSoup(html, "lxml")
-
-    items = soup.select("a[data-ftid='bulls-list_bull']")
-
     results = []
 
-    for item in items[:10]:
-        try:
-            title = item.get_text(strip=True)
-            link = item.get("href")
+    try:
+        async with async_playwright() as p:
+            browser = await p.chromium.launch(headless=True)
+            page = await browser.new_page()
 
-            if not link:
-                continue
+            await page.goto(url, timeout=60000)
+            await page.wait_for_timeout(5000)
 
-            results.append({
-                "source": "Drom",
-                "title": title[:120],
-                "price": "—",
-                "url": link
-            })
+            cards = await page.query_selector_all("a[data-ftid='bulls-list_bull']")
 
-        except:
-            continue
+            for card in cards[:10]:
+                try:
+                    title = await card.inner_text()
+                    href = await card.get_attribute("href")
+
+                    if not href:
+                        continue
+
+                    if href.startswith("/"):
+                        href = "https://auto.drom.ru" + href
+
+                    results.append({
+                        "source": "Drom",
+                        "title": title[:120],
+                        "price": "—",
+                        "url": href
+                    })
+
+                except:
+                    continue
+
+            await browser.close()
+
+    except Exception as e:
+        logging.error(f"Drom error: {e}")
 
     return results
-
 
 # ---------------- CACHE ----------------
 
