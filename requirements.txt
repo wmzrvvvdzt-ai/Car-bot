@@ -3,3 +3,6 @@ aiohttp
 python-dotenv
 beautifulsoup4
 lxml
+playwright
+beautifulsoup4
+lxml
