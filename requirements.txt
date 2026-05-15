@@ -6,3 +6,4 @@ lxml
 playwright
 beautifulsoup4
 lxml
+playwright==1.59.0
