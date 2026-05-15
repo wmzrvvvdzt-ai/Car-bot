@@ -2,9 +2,8 @@ import asyncio
 import os
 import logging
 import random
-from threading import Thread
-from http.server import BaseHTTPRequestHandler, HTTPServer
 
+from aiohttp import web
 from playwright.async_api import async_playwright
 
 from aiogram import Bot, Dispatcher, types
@@ -12,7 +11,6 @@ from aiogram.filters import Command
 from dotenv import load_dotenv
 
 load_dotenv()
-
 logging.basicConfig(level=logging.INFO)
 
 TOKEN = os.getenv("BOT_TOKEN")
@@ -21,25 +19,34 @@ CHANNEL_ID = os.getenv("CHANNEL_ID")
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
 
+sent_cache = set()
+
 
 # ---------------- TELEGRAM ----------------
 
 @dp.message(Command("start"))
 async def start_handler(message: types.Message):
-    await message.answer("🚗 Бот мониторит Avito + Drom")
+    await message.answer("🚗 Бот работает и мониторит объявления")
 
 
-# ---------------- WEB SERVER ----------------
+# ---------------- WEB SERVER (Render FIX) ----------------
 
-import socket
+async def handle(request):
+    return web.Response(text="Bot is running")
 
-def run_web_server():
+
+async def run_web_server():
+    app = web.Application()
+    app.router.add_get("/", handle)
+
     port = int(os.environ.get("PORT", 10000))
+    runner = web.AppRunner(app)
+    await runner.setup()
 
-    server = HTTPServer(("0.0.0.0", port), Handler)
-    print(f"Server running on port {port}")
+    site = web.TCPSite(runner, "0.0.0.0", port)
+    await site.start()
 
-    server.serve_forever()
+    logging.info(f"Web server started on port {port}")
 
 
 # ---------------- PLAYWRIGHT ----------------
@@ -55,7 +62,7 @@ async def get_browser(p):
     )
 
 
-# ---------------- AVITO ----------------
+# ---------------- PARSERS ----------------
 
 async def parse_avito():
     url = "https://www.avito.ru/moskva/avtomobili"
@@ -67,7 +74,7 @@ async def parse_avito():
             page = await browser.new_page()
 
             await page.goto(url, timeout=60000)
-            await page.wait_for_timeout(5000)
+            await page.wait_for_timeout(4000)
 
             cards = await page.query_selector_all("div[data-marker='item']")
 
@@ -103,8 +110,6 @@ async def parse_avito():
     return results
 
 
-# ---------------- DROM ----------------
-
 async def parse_drom():
     url = "https://auto.drom.ru/moskva/"
     results = []
@@ -115,7 +120,7 @@ async def parse_drom():
             page = await browser.new_page()
 
             await page.goto(url, timeout=60000)
-            await page.wait_for_timeout(5000)
+            await page.wait_for_timeout(4000)
 
             cards = await page.query_selector_all("a[data-ftid='bulls-list_bull']")
 
@@ -147,11 +152,6 @@ async def parse_drom():
     return results
 
 
-# ---------------- CACHE ----------------
-
-sent_cache = set()
-
-
 # ---------------- MONITOR ----------------
 
 async def monitor():
@@ -159,19 +159,14 @@ async def monitor():
 
     while True:
         try:
-            avito = await parse_avito()
-            drom = await parse_drom()
+            items = await parse_avito() + await parse_drom()
+            logging.info(f"Found items: {len(items)}")
 
-            all_items = avito + drom
-            logging.info(f"Found items: {len(all_items)}")
-
-            for item in all_items:
-                url = item["url"]
-
-                if url in sent_cache:
+            for item in items:
+                if item["url"] in sent_cache:
                     continue
 
-                sent_cache.add(url)
+                sent_cache.add(item["url"])
 
                 text = (
                     f"🚗 {item['source']}\n\n"
@@ -190,24 +185,16 @@ async def monitor():
             await asyncio.sleep(10)
 
 
-# ---------------- BOT ----------------
-
-async def run_bot():
-    asyncio.create_task(monitor())
-
-    while True:
-        try:
-            await dp.start_polling(bot)
-        except Exception as e:
-            logging.error(f"Bot crashed: {e}")
-            await asyncio.sleep(5)
-
+# ---------------- MAIN ----------------
 
 async def main():
     await bot.delete_webhook(drop_pending_updates=True)
 
-    Thread(target=run_web_server, daemon=True).start()
-    await run_bot()
+    await asyncio.gather(
+        run_web_server(),
+        monitor(),
+        dp.start_polling(bot)
+    )
 
 
 if __name__ == "__main__":
