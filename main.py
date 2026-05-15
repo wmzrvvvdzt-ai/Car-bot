@@ -1,53 +1,70 @@
-import asyncio
 import os
+import asyncio
+import threading
 import logging
-import random
 
 from aiohttp import web
-from playwright.async_api import async_playwright
-
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command
-from dotenv import load_dotenv
 
-load_dotenv()
-logging.basicConfig(level=logging.INFO)
-
+# =====================
+# CONFIG
+# =====================
 TOKEN = os.getenv("BOT_TOKEN")
-CHANNEL_ID = os.getenv("CHANNEL_ID")
+
+logging.basicConfig(level=logging.INFO)
 
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
 
-sent_cache = set()
 
-
-# ---------------- TELEGRAM ----------------
-
+# =====================
+# TELEGRAM HANDLERS
+# =====================
 @dp.message(Command("start"))
-async def start_handler(message: types.Message):
-    await message.answer("🚗 Бот работает и мониторит объявления")
+async def start(message: types.Message):
+    await message.answer("Бот работает 🚀")
 
 
-# ---------------- WEB SERVER (Render FIX) ----------------
+@dp.message()
+async def echo(message: types.Message):
+    await message.answer(message.text)
 
+
+# =====================
+# WEB SERVER (Render ping)
+# =====================
 async def handle(request):
-    return web.Response(text="Bot is running")
+    return web.Response(text="OK")
 
 
-async def run_web_server():
+def run_web_server():
     app = web.Application()
     app.router.add_get("/", handle)
 
     port = int(os.environ.get("PORT", 10000))
-    runner = web.AppRunner(app)
-    await runner.setup()
+    web.run_app(app, host="0.0.0.0", port=port)
 
-    site = web.TCPSite(runner, "0.0.0.0", port)
-    await site.start()
 
-    logging.info(f"Web server started on port {port}")
+# =====================
+# BOT RUNNER
+# =====================
+async def run_bot():
+    # ВАЖНО: только ОДИН polling процесс
+    await dp.start_polling(bot)
 
+
+# =====================
+# MAIN
+# =====================
+if __name__ == "__main__":
+
+    # Web server в отдельном потоке
+    web_thread = threading.Thread(target=run_web_server, daemon=True)
+    web_thread.start()
+
+    # Bot polling в основном потоке
+    asyncio.run(run_bot())
 
 # ---------------- PLAYWRIGHT ----------------
 
