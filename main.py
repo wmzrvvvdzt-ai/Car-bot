@@ -10,7 +10,7 @@ from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command
 from dotenv import load_dotenv
 
-# ---------------- LOAD ENV ----------------
+# ---------------- ENV ----------------
 
 load_dotenv()
 
@@ -56,7 +56,6 @@ async def get_browser():
     playwright = await async_playwright().start()
 
     browser = await playwright.chromium.launch(
-        executable_path="/opt/render/.cache/ms-playwright/chromium-1217/chrome-linux/chrome",
         headless=True,
         args=[
             "--no-sandbox",
@@ -207,8 +206,7 @@ async def monitor():
 
                 if CHANNEL_ID:
                     await bot.send_message(CHANNEL_ID, text)
-
-                logging.info("Sent item")
+                    logging.info("Sent item to Telegram")
 
             await asyncio.sleep(random.randint(120, 300))
 
@@ -234,12 +232,16 @@ async def run_bot():
 # ---------------- MAIN ----------------
 
 async def main():
+    # FIX Telegram conflict
     await bot.delete_webhook(drop_pending_updates=True)
 
+    # Render web server
     Thread(target=run_web_server, daemon=True).start()
 
+    # Start bot
     await run_bot()
 
 
 if __name__ == "__main__":
+    asyncio.run(main())
     asyncio.run(main())
