@@ -31,19 +31,15 @@ async def start_handler(message: types.Message):
 
 # ---------------- WEB SERVER ----------------
 
-class Handler(BaseHTTPRequestHandler):
-    def do_GET(self):
-        self.send_response(200)
-        self.end_headers()
-        self.wfile.write(b"Bot is running")
-
-    def log_message(self, format, *args):
-        return
-
+import socket
 
 def run_web_server():
     port = int(os.environ.get("PORT", 10000))
-    HTTPServer(("0.0.0.0", port), Handler).serve_forever()
+
+    server = HTTPServer(("0.0.0.0", port), Handler)
+    print(f"Server running on port {port}")
+
+    server.serve_forever()
 
 
 # ---------------- PLAYWRIGHT ----------------
