@@ -5,13 +5,12 @@ import random
 from threading import Thread
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
-import aiohttp
-from bs4 import BeautifulSoup
-from playwright.async_api import async_playwright  # ← ВОТ СЮДА ДОБАВИТЬ
-
+from playwright.async_api import async_playwright
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command
 from dotenv import load_dotenv
+
+# ---------------- LOAD ENV ----------------
 
 load_dotenv()
 
@@ -26,15 +25,14 @@ if not TOKEN:
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
 
-
 # ---------------- TELEGRAM ----------------
 
 @dp.message(Command("start"))
 async def start_handler(message: types.Message):
-    await message.answer("🚗 Бот мониторит Avito + Drom и ищет объявления")
+    await message.answer("🚗 Бот мониторит Avito + Drom")
 
 
-# ---------------- WEB SERVER (Render) ----------------
+# ---------------- WEB SERVER ----------------
 
 class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
@@ -48,18 +46,26 @@ class Handler(BaseHTTPRequestHandler):
 
 def run_web_server():
     port = int(os.environ.get("PORT", 10000))
-    HTTPServer(("0.0.0.0", port), Handler).serve_forever()
+    server = HTTPServer(("0.0.0.0", port), Handler)
+    server.serve_forever()
 
 
-# ---------------- HTTP ----------------
+# ---------------- PLAYWRIGHT ----------------
 
-async def fetch(session, url):
-    try:
-        async with session.get(url, timeout=15) as resp:
-            return await resp.text()
-    except Exception as e:
-        logging.error(f"Fetch error {url}: {e}")
-        return None
+async def get_browser():
+    playwright = await async_playwright().start()
+
+    browser = await playwright.chromium.launch(
+        executable_path="/opt/render/.cache/ms-playwright/chromium-1217/chrome-linux/chrome",
+        headless=True,
+        args=[
+            "--no-sandbox",
+            "--disable-dev-shm-usage",
+            "--disable-gpu"
+        ]
+    )
+
+    return playwright, browser
 
 
 # ---------------- AVITO ----------------
@@ -70,55 +76,50 @@ async def parse_avito():
     results = []
 
     try:
-        async with async_playwright() as p:
-    browser = await p.chromium.launch(
-        executable_path="/opt/render/.cache/ms-playwright/chromium-1217/chrome-linux/chrome",
-        headless=True,
-        args=[
-            "--no-sandbox",
-            "--disable-dev-shm-usage",
-            "--disable-gpu"
-        ]
-    )
+        playwright, browser = await get_browser()
 
-    page = await browser.new_page()
+        page = await browser.new_page()
 
-            await page.goto(url, timeout=60000)
-            await page.wait_for_timeout(5000)
+        await page.goto(url, timeout=60000)
+        await page.wait_for_timeout(5000)
 
-            cards = await page.query_selector_all("div[data-marker='item']")
+        cards = await page.query_selector_all("div[data-marker='item']")
 
-            for card in cards[:10]:
-                try:
-                    title = await card.inner_text()
-                    link_el = await card.query_selector("a")
+        for card in cards[:10]:
+            try:
+                title = await card.inner_text()
 
-                    if not link_el:
-                        continue
+                link_el = await card.query_selector("a")
 
-                    href = await link_el.get_attribute("href")
-                    if not href:
-                        continue
-
-                    if href.startswith("/"):
-                        href = "https://www.avito.ru" + href
-
-                    results.append({
-                        "source": "Avito",
-                        "title": title[:120],
-                        "price": "—",
-                        "url": href
-                    })
-
-                except:
+                if not link_el:
                     continue
 
-            await browser.close()
+                href = await link_el.get_attribute("href")
+
+                if not href:
+                    continue
+
+                if href.startswith("/"):
+                    href = "https://www.avito.ru" + href
+
+                results.append({
+                    "source": "Avito",
+                    "title": title[:120],
+                    "price": "—",
+                    "url": href
+                })
+
+            except Exception:
+                continue
+
+        await browser.close()
+        await playwright.stop()
 
     except Exception as e:
         logging.error(f"Avito error: {e}")
 
     return results
+
 
 # ---------------- DROM ----------------
 
@@ -128,50 +129,47 @@ async def parse_drom():
     results = []
 
     try:
-        browser = await p.chromium.launch(
-    executable_path="/opt/render/.cache/ms-playwright/chromium-1217/chrome-linux/chrome",
-    headless=True,
-    args=[
-        "--no-sandbox",
-        "--disable-dev-shm-usage",
-        "--disable-gpu"
-    ]
-)
-            browser = await p.chromium.launch(headless=True)
-            page = await browser.new_page()
+        playwright, browser = await get_browser()
 
-            await page.goto(url, timeout=60000)
-            await page.wait_for_timeout(5000)
+        page = await browser.new_page()
 
-            cards = await page.query_selector_all("a[data-ftid='bulls-list_bull']")
+        await page.goto(url, timeout=60000)
+        await page.wait_for_timeout(5000)
 
-            for card in cards[:10]:
-                try:
-                    title = await card.inner_text()
-                    href = await card.get_attribute("href")
+        cards = await page.query_selector_all(
+            "a[data-ftid='bulls-list_bull']"
+        )
 
-                    if not href:
-                        continue
+        for card in cards[:10]:
+            try:
+                title = await card.inner_text()
 
-                    if href.startswith("/"):
-                        href = "https://auto.drom.ru" + href
+                href = await card.get_attribute("href")
 
-                    results.append({
-                        "source": "Drom",
-                        "title": title[:120],
-                        "price": "—",
-                        "url": href
-                    })
-
-                except:
+                if not href:
                     continue
 
-            await browser.close()
+                if href.startswith("/"):
+                    href = "https://auto.drom.ru" + href
+
+                results.append({
+                    "source": "Drom",
+                    "title": title[:120],
+                    "price": "—",
+                    "url": href
+                })
+
+            except Exception:
+                continue
+
+        await browser.close()
+        await playwright.stop()
 
     except Exception as e:
         logging.error(f"Drom error: {e}")
 
     return results
+
 
 # ---------------- CACHE ----------------
 
@@ -210,7 +208,7 @@ async def monitor():
                 if CHANNEL_ID:
                     await bot.send_message(CHANNEL_ID, text)
 
-                logging.info("Sent deal to channel")
+                logging.info("Sent item")
 
             await asyncio.sleep(random.randint(120, 300))
 
@@ -219,7 +217,7 @@ async def monitor():
             await asyncio.sleep(10)
 
 
-# ---------------- BOT LOOP ----------------
+# ---------------- BOT ----------------
 
 async def run_bot():
     asyncio.create_task(monitor())
@@ -227,19 +225,20 @@ async def run_bot():
     while True:
         try:
             await dp.start_polling(bot)
+
         except Exception as e:
             logging.error(f"Bot crashed: {e}")
             await asyncio.sleep(5)
 
 
+# ---------------- MAIN ----------------
+
 async def main():
-    await bot.delete_webhook(drop_pending_updates=True)  # ← FIX Telegram conflict
+    await bot.delete_webhook(drop_pending_updates=True)
 
     Thread(target=run_web_server, daemon=True).start()
+
     await run_bot()
-
-
-
 
 
 if __name__ == "__main__":
