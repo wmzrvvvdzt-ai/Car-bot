@@ -6,11 +6,10 @@ from threading import Thread
 from http.server import BaseHTTPRequestHandler, HTTPServer
 
 from playwright.async_api import async_playwright
+
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command
 from dotenv import load_dotenv
-
-# ---------------- ENV ----------------
 
 load_dotenv()
 
@@ -19,11 +18,9 @@ logging.basicConfig(level=logging.INFO)
 TOKEN = os.getenv("BOT_TOKEN")
 CHANNEL_ID = os.getenv("CHANNEL_ID")
 
-if not TOKEN:
-    raise RuntimeError("❌ BOT_TOKEN не найден")
-
 bot = Bot(token=TOKEN)
 dp = Dispatcher()
+
 
 # ---------------- TELEGRAM ----------------
 
@@ -46,16 +43,13 @@ class Handler(BaseHTTPRequestHandler):
 
 def run_web_server():
     port = int(os.environ.get("PORT", 10000))
-    server = HTTPServer(("0.0.0.0", port), Handler)
-    server.serve_forever()
+    HTTPServer(("0.0.0.0", port), Handler).serve_forever()
 
 
 # ---------------- PLAYWRIGHT ----------------
 
-async def get_browser():
-    playwright = await async_playwright().start()
-
-    browser = await playwright.chromium.launch(
+async def get_browser(p):
+    return await p.chromium.launch(
         headless=True,
         args=[
             "--no-sandbox",
@@ -64,55 +58,48 @@ async def get_browser():
         ]
     )
 
-    return playwright, browser
-
 
 # ---------------- AVITO ----------------
 
 async def parse_avito():
     url = "https://www.avito.ru/moskva/avtomobili"
-
     results = []
 
     try:
-        playwright, browser = await get_browser()
+        async with async_playwright() as p:
+            browser = await get_browser(p)
+            page = await browser.new_page()
 
-        page = await browser.new_page()
+            await page.goto(url, timeout=60000)
+            await page.wait_for_timeout(5000)
 
-        await page.goto(url, timeout=60000)
-        await page.wait_for_timeout(5000)
+            cards = await page.query_selector_all("div[data-marker='item']")
 
-        cards = await page.query_selector_all("div[data-marker='item']")
+            for card in cards[:10]:
+                try:
+                    title = await card.inner_text()
+                    link = await card.query_selector("a")
 
-        for card in cards[:10]:
-            try:
-                title = await card.inner_text()
+                    if not link:
+                        continue
 
-                link_el = await card.query_selector("a")
+                    href = await link.get_attribute("href")
+                    if not href:
+                        continue
 
-                if not link_el:
+                    if href.startswith("/"):
+                        href = "https://www.avito.ru" + href
+
+                    results.append({
+                        "source": "Avito",
+                        "title": title[:120],
+                        "price": "—",
+                        "url": href
+                    })
+                except:
                     continue
 
-                href = await link_el.get_attribute("href")
-
-                if not href:
-                    continue
-
-                if href.startswith("/"):
-                    href = "https://www.avito.ru" + href
-
-                results.append({
-                    "source": "Avito",
-                    "title": title[:120],
-                    "price": "—",
-                    "url": href
-                })
-
-            except Exception:
-                continue
-
-        await browser.close()
-        await playwright.stop()
+            await browser.close()
 
     except Exception as e:
         logging.error(f"Avito error: {e}")
@@ -124,45 +111,39 @@ async def parse_avito():
 
 async def parse_drom():
     url = "https://auto.drom.ru/moskva/"
-
     results = []
 
     try:
-        playwright, browser = await get_browser()
+        async with async_playwright() as p:
+            browser = await get_browser(p)
+            page = await browser.new_page()
 
-        page = await browser.new_page()
+            await page.goto(url, timeout=60000)
+            await page.wait_for_timeout(5000)
 
-        await page.goto(url, timeout=60000)
-        await page.wait_for_timeout(5000)
+            cards = await page.query_selector_all("a[data-ftid='bulls-list_bull']")
 
-        cards = await page.query_selector_all(
-            "a[data-ftid='bulls-list_bull']"
-        )
+            for card in cards[:10]:
+                try:
+                    title = await card.inner_text()
+                    href = await card.get_attribute("href")
 
-        for card in cards[:10]:
-            try:
-                title = await card.inner_text()
+                    if not href:
+                        continue
 
-                href = await card.get_attribute("href")
+                    if href.startswith("/"):
+                        href = "https://auto.drom.ru" + href
 
-                if not href:
+                    results.append({
+                        "source": "Drom",
+                        "title": title[:120],
+                        "price": "—",
+                        "url": href
+                    })
+                except:
                     continue
 
-                if href.startswith("/"):
-                    href = "https://auto.drom.ru" + href
-
-                results.append({
-                    "source": "Drom",
-                    "title": title[:120],
-                    "price": "—",
-                    "url": href
-                })
-
-            except Exception:
-                continue
-
-        await browser.close()
-        await playwright.stop()
+            await browser.close()
 
     except Exception as e:
         logging.error(f"Drom error: {e}")
@@ -186,16 +167,15 @@ async def monitor():
             drom = await parse_drom()
 
             all_items = avito + drom
-
             logging.info(f"Found items: {len(all_items)}")
 
             for item in all_items:
-                key = item["url"]
+                url = item["url"]
 
-                if key in sent_cache:
+                if url in sent_cache:
                     continue
 
-                sent_cache.add(key)
+                sent_cache.add(url)
 
                 text = (
                     f"🚗 {item['source']}\n\n"
@@ -206,7 +186,6 @@ async def monitor():
 
                 if CHANNEL_ID:
                     await bot.send_message(CHANNEL_ID, text)
-                    logging.info("Sent item to Telegram")
 
             await asyncio.sleep(random.randint(120, 300))
 
@@ -223,25 +202,17 @@ async def run_bot():
     while True:
         try:
             await dp.start_polling(bot)
-
         except Exception as e:
             logging.error(f"Bot crashed: {e}")
             await asyncio.sleep(5)
 
 
-# ---------------- MAIN ----------------
-
 async def main():
-    # FIX Telegram conflict
     await bot.delete_webhook(drop_pending_updates=True)
 
-    # Render web server
     Thread(target=run_web_server, daemon=True).start()
-
-    # Start bot
     await run_bot()
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
     asyncio.run(main())
