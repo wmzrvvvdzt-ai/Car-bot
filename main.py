@@ -71,8 +71,17 @@ async def parse_avito():
 
     try:
         async with async_playwright() as p:
-            browser = await p.chromium.launch(headless=True)
-            page = await browser.new_page()
+    browser = await p.chromium.launch(
+        executable_path="/opt/render/.cache/ms-playwright/chromium-1217/chrome-linux/chrome",
+        headless=True,
+        args=[
+            "--no-sandbox",
+            "--disable-dev-shm-usage",
+            "--disable-gpu"
+        ]
+    )
+
+    page = await browser.new_page()
 
             await page.goto(url, timeout=60000)
             await page.wait_for_timeout(5000)
@@ -119,7 +128,15 @@ async def parse_drom():
     results = []
 
     try:
-        async with async_playwright() as p:
+        browser = await p.chromium.launch(
+    executable_path="/opt/render/.cache/ms-playwright/chromium-1217/chrome-linux/chrome",
+    headless=True,
+    args=[
+        "--no-sandbox",
+        "--disable-dev-shm-usage",
+        "--disable-gpu"
+    ]
+)
             browser = await p.chromium.launch(headless=True)
             page = await browser.new_page()
 
